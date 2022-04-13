@@ -48,7 +48,7 @@ result = nil
 done = false
 task = tw.user_timeline(:user_id => ${USER_ID}).next { |res|
   result = res
-done = true
+  done = true
 }
 while !done
   sleep 0.1
@@ -56,6 +56,31 @@ end
 result.map { |msg|
   \\\\"#{msg.id} #{msg.message}\\\\"
 }.join(\\\\"<>\\\\")
+EOM
+}
+
+mikcall_fav() {
+	local target="$1"
+
+	mikcall <<EOM
+tw = Plugin.collect(:worlds).to_a[1]
+result = nil
+done = false
+target = ${target}
+task = tw.user_timeline(:user_id => ${USER_ID}).next { |res|
+  result = res
+  done = true
+}
+while !done
+  sleep 0.1
+end
+result.each { |msg|
+  if msg.id == target
+    msg.favorite
+    return 'OK'
+  end
+}
+return 'FAIL'
 EOM
 }
 
@@ -216,6 +241,28 @@ f2t_write() {
 	local offset="$3"
 
 	check_file_path "$path" || return 0
+
+	fname="${path#/}"
+	cont=${TWEET_FILES[$fname]}
+	if [[ -n "${cont}" ]]; then
+		if [[ ${offset} != 0 || ${writelen} != 2 ]]; then
+			booze_err=-$EIO
+			booze_out=-$EIO
+			return 1
+		fi
+
+		written="$(</dev/stdin)"
+		log "written=${written}"
+		if [[ "${written}" == "1" ]]; then
+			mikcall_fav ${fname}
+			booze_out=${writelen}
+			return 0
+		else
+			booze_err=-$EIO
+			booze_out=-$EIO
+			return 1
+		fi
+	fi
 
 	case $path in
 	"/user_id")

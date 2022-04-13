@@ -22,4 +22,7 @@ test "$(cat user_id)" == ${USER_ID}
 ls -lai
 grep . *
 
+TARGET=1511337915154333700
+echo 1 > ${TARGET}
+
 popd
