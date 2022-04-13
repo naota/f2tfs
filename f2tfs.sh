@@ -29,7 +29,20 @@ add_journal() {
 declare -A TWEET_FILES
 
 mikcall() {
-	read -r -d '' rb <<EOM
+	read -r -d '' rb
+	arg="[(\"code\", <\"${rb@E}\">), (\"file\", <\"org.mikutter.eval\">)]"
+
+	log "${arg}"
+
+	sudo -u naota gdbus call -a ${DBUS_SESSION_BUS_ADDRESS} \
+		-d org.mikutter.dynamic \
+		-o /org/mikutter/MyInstance \
+		-m org.mikutter.eval.ruby \
+		"${arg}" 2>>${LOG_FILE}
+}
+
+mikcall_tweets() {
+	mikcall <<EOM
 tw = Plugin.collect(:worlds).to_a[1]
 result = nil
 done = false
@@ -44,16 +57,6 @@ result.map { |msg|
   \\\\"#{msg.id} #{msg.message}\\\\"
 }.join(\\\\"<>\\\\")
 EOM
-
-	arg="[(\"code\", <\"${rb@E}\">), (\"file\", <\"org.mikutter.eval\">)]"
-
-	log "${arg}"
-
-	sudo -u naota gdbus call -a ${DBUS_SESSION_BUS_ADDRESS} \
-		-d org.mikutter.dynamic \
-		-o /org/mikutter/MyInstance \
-		-m org.mikutter.eval.ruby \
-		"${arg}" 2>>${LOG_FILE}
 }
 
 regular_file_stat() {
@@ -108,7 +111,7 @@ f2t_readdir() {
 		return 0
 	fi
 
-	res=$(mikcall | sed -e "s/^('//; s/',)$//")
+	res=$(mikcall_tweets | sed -e "s/^('//; s/',)$//")
 	log "${res}"
 	text=$(eval echo -e "${res}")
 	while : ; do
