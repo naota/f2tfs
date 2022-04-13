@@ -5,6 +5,12 @@ pushd ${BOOZE_DIR} >/dev/null
 . ./booze.sh
 popd >/dev/null
 
+LOG_FILE=/tmp/log
+rm -f ${LOG_FILE}
+log() {
+	echo $* >> ${LOG_FILE}
+}
+
 f2t_getattr() {
 	local now=`date +%s`
 	local times="$now $now $now"
