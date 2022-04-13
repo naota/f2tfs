@@ -6,6 +6,17 @@ set -xe
 
 ./f2tfs.sh ${MNT}
 
-ls -lai ${MNT}
+trap "cd /; umount ${MNT}" 0 1 2 3 15
 
-umount ${MNT}
+findmnt ${MNT}
+
+pushd ${MNT}
+
+ls -lai
+
+cat user_id
+USER_ID=15926668 
+echo ${USER_ID} > user_id
+test "$(cat user_id)" == ${USER_ID}
+
+popd

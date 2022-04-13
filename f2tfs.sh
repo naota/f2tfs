@@ -5,37 +5,145 @@ pushd ${BOOZE_DIR} >/dev/null
 . ./booze.sh
 popd >/dev/null
 
+USER_ID="0"
+
 LOG_FILE=/tmp/log
 rm -f ${LOG_FILE}
 log() {
 	echo $* >> ${LOG_FILE}
 }
 
+JOURNAL=journal
+load_journal() {
+	test -e ${JOURNAL} || return 0
+
+	source ${JOURNAL}
+	rm -f ${JOURNAL}
+}
+add_journal() {
+	local name="$1"
+	value=$(eval "echo \$${name}")
+	echo ${name}=${value@Q} >> ${JOURNAL}
+}
+
 f2t_getattr() {
+	local path="$1"
 	local now=`date +%s`
 	local times="$now $now $now"
 	local ids="`id -u` `id -g`"
-	if [ "$1" == "/" ]; then
-		booze_out="0 $(printf '%o' $((S_IFDIR | 0755))) 2 $ids 0 0 0 $times"
+
+	load_journal
+
+	# booze_out="<ino> <mode> <nlink> <uid> <gid> <rdev> <size>
+	# 	     <blocks> <atime> <mtime> <ctime>"
+	case "$path" in
+	"/")
+		booze_out="1 $(printf '%o' $((S_IFDIR | 0755))) 2 $ids 0 0 0 $times"
 		return 0
-	else
+		;;
+	"/user_id")
+		booze_out="2 $(printf '%o' $((S_IFREG | 0644))) 1 $ids 0 $(( ${#USER_ID} + 1 )) 1 $times"
+		return 0
+		;;
+	*)
 		booze_err=-$ENOENT
 		return 1
-	fi
+		;;
+	esac
 }
 
 f2t_readdir() {
-	booze_out="./.."
+	booze_out="./../user_id"
 	return 0
 }
 
-f2t_open() {
-	if [ "$1" == "/" ]; then
+check_file_path() {
+	local $path="$1"
+
+	case $path in
+	"/" | "/user_id")
 		return 0
-	else
+		;;
+	*)
 		booze_err=-$ENOENT
 		return 1
-	fi
+		;;
+	esac
+}
+
+f2t_open() {
+	local path="$1"
+
+	check_file_path "$path" || return 1
+	return 0
+}
+
+f2t_read() {
+	local path="$1"
+	local readlen="$2"
+	local offset="$3"
+
+	check_file_path "$path" || return 1
+	load_journal
+
+	case $path in
+	"/user_id")
+		if [[ ${offset} != 0 ]]; then
+			return 0
+		fi
+
+		log "read USER_ID=${USER_ID}"
+		echo ${USER_ID}
+		;;
+	esac
+
+	return 0
+}
+
+f2t_truncate() {
+	local path="$1"
+	local len="$2"
+
+	check_file_path "$path" || return 1
+
+	case $path in
+	"/user_id")
+		if [[ ${len} != 0 ]]; then
+			booze_err=-$EINVAL
+			return 1
+		fi
+
+		USER_ID=""
+		log "truncate USER_ID=${USER_ID}"
+		;;
+	esac
+
+	return 0
+}
+
+f2t_write() {
+	local path="$1"
+	local writelen="$2"
+	local offset="$3"
+
+	check_file_path "$path" || return 0
+
+	case $path in
+	"/user_id")
+		if [[ ${offset} != 0 ]]; then
+			booze_err=-$EIO
+			booze_out=-$EIO
+			return 1
+		fi
+
+		USER_ID="$(</dev/stdin)"
+		add_journal USER_ID
+		log "write USER_ID=${USER_ID}"
+		booze_out=$(( ${#USER_ID} + 1 ))
+		;;
+	esac
+
+	return 0
 }
 
 declare -A f2t_ops
@@ -45,4 +153,5 @@ for name in ${BOOZE_CALL_NAMES[@]}; do
 	fi
 done
 
-booze f2t_ops "$1"
+rm ${JOURNAL}
+booze -o use_ino f2t_ops "$1"
