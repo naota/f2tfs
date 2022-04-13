@@ -19,4 +19,7 @@ USER_ID=15926668
 echo ${USER_ID} > user_id
 test "$(cat user_id)" == ${USER_ID}
 
+ls -lai
+grep . *
+
 popd

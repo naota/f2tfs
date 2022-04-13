@@ -26,6 +26,47 @@ add_journal() {
 	echo ${name}=${value@Q} >> ${JOURNAL}
 }
 
+declare -A TWEET_FILES
+
+mikcall() {
+	read -r -d '' rb <<EOM
+tw = Plugin.collect(:worlds).to_a[1]
+result = nil
+done = false
+task = tw.user_timeline(:user_id => ${USER_ID}).next { |res|
+  result = res
+done = true
+}
+while !done
+  sleep 0.1
+end
+result.map { |msg|
+  \\\\"#{msg.id} #{msg.message}\\\\"
+}.join(\\\\"<>\\\\")
+EOM
+
+	arg="[(\"code\", <\"${rb@E}\">), (\"file\", <\"org.mikutter.eval\">)]"
+
+	log "${arg}"
+
+	sudo -u naota gdbus call -a ${DBUS_SESSION_BUS_ADDRESS} \
+		-d org.mikutter.dynamic \
+		-o /org/mikutter/MyInstance \
+		-m org.mikutter.eval.ruby \
+		"${arg}" 2>>${LOG_FILE}
+}
+
+regular_file_stat() {
+	local ino="$1"
+	local size="$2"
+
+	local now=`date +%s`
+	local times="$now $now $now"
+	local ids="`id -u` `id -g`"
+
+	echo "$ino $(printf '%o' $((S_IFREG | 0644))) 1 $ids 0 ${size} 1 $times"
+}
+
 f2t_getattr() {
 	local path="$1"
 	local now=`date +%s`
@@ -36,13 +77,21 @@ f2t_getattr() {
 
 	# booze_out="<ino> <mode> <nlink> <uid> <gid> <rdev> <size>
 	# 	     <blocks> <atime> <mtime> <ctime>"
+	fname="${path#/}"
+	cont=${TWEET_FILES[$fname]}
+	if [[ -n "${cont}" ]]; then
+		size=$(printf "%s\n" "${cont}" | wc -c)
+		booze_out=$(regular_file_stat ${fname} ${size})
+		return 0
+	fi
+
 	case "$path" in
 	"/")
 		booze_out="1 $(printf '%o' $((S_IFDIR | 0755))) 2 $ids 0 0 0 $times"
 		return 0
 		;;
 	"/user_id")
-		booze_out="2 $(printf '%o' $((S_IFREG | 0644))) 1 $ids 0 $(( ${#USER_ID} + 1 )) 1 $times"
+		booze_out=$(regular_file_stat 2 $(( ${#USER_ID} + 1 )))
 		return 0
 		;;
 	*)
@@ -54,11 +103,41 @@ f2t_getattr() {
 
 f2t_readdir() {
 	booze_out="./../user_id"
+
+	if [[ "${USER_ID}" == 0 ]]; then
+		return 0
+	fi
+
+	res=$(mikcall | sed -e "s/^('//; s/',)$//")
+	log "${res}"
+	text=$(eval echo -e "${res}")
+	while : ; do
+		item=${text%%<>*}
+		text=${text#*<>}
+		log "${item}"
+
+		fname="${item%% *}"
+		content="${item#* }"
+		TWEET_FILES[${fname}]="${content}"
+
+		[[ "${text}" == "${item}" ]] && break
+	done
+
+	for fname in "${!TWEET_FILES[@]}"; do
+		booze_out+="/${fname}"
+	done
+	
 	return 0
 }
 
 check_file_path() {
 	local $path="$1"
+
+	fname="${path#/}"
+	cont=${TWEET_FILES[$fname]}
+	if [[ -n "${cont}" ]]; then
+		return 0
+	fi
 
 	case $path in
 	"/" | "/user_id")
@@ -85,6 +164,13 @@ f2t_read() {
 
 	check_file_path "$path" || return 1
 	load_journal
+
+	fname="${path#/}"
+	cont=${TWEET_FILES[$fname]}
+	if [[ -n "${cont}" ]]; then
+		printf "%s\n" "${cont}"
+		return 0
+	fi
 
 	case $path in
 	"/user_id")
