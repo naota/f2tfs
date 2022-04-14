@@ -12,14 +12,14 @@ findmnt ${MNT}
 
 pushd ${MNT}
 
-ls -lai
+ls -li
 
 cat user_id
 USER_ID=15926668 
 echo ${USER_ID} > user_id
 test "$(cat user_id)" == ${USER_ID}
 
-ls -lai
+ls -li
 grep . *
 
 TARGET=1511337915154333700
