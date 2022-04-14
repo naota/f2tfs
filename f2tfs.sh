@@ -54,7 +54,7 @@ while !done
   sleep 0.1
 end
 result.map { |msg|
-  \\\\"#{msg.id} #{msg.message}\\\\"
+  \\\\"#{msg.id} #{msg.created.to_i} #{msg.modified.to_i} #{msg.message}\\\\"
 }.join(\\\\"<>\\\\")
 EOM
 }
@@ -87,9 +87,13 @@ EOM
 regular_file_stat() {
 	local ino="$1"
 	local size="$2"
+	local ctime="$3"
+	local mtime="$4"
 
 	local now=`date +%s`
-	local times="$now $now $now"
+	[[ -z "${ctime}" ]] && ctime=$now
+	[[ -z "${mtime}" ]] && mtime=$now
+	local times="$now $mtime $ctime"
 	local ids="`id -u` `id -g`"
 
 	echo "$ino $(printf '%o' $((S_IFREG | 0644))) 1 $ids 0 ${size} 1 $times"
@@ -108,8 +112,10 @@ f2t_getattr() {
 	fname="${path#/}"
 	cont=${TWEET_FILES[$fname]}
 	if [[ -n "${cont}" ]]; then
-		size=$(printf "%s\n" "${cont}" | wc -c)
-		booze_out=$(regular_file_stat ${fname} ${size})
+		local size=$(printf "%s\n" "${cont}" | wc -c)
+		local ctime=${TWEET_FILES["${fname}_ctime"]}
+		local mtime=${TWEET_FILES["${fname}_mtime"]}
+		booze_out=$(regular_file_stat ${fname} ${size} ${ctime} ${mtime})
 		return 0
 	fi
 
@@ -144,14 +150,22 @@ f2t_readdir() {
 		text=${text#*<>}
 		log "${item}"
 
-		fname="${item%% *}"
-		content="${item#* }"
+		local item_orig="${item}"
+		local fname="${item%% *}"; item="${item#* }"
+		local ctime="${item%% *}"; item="${item#* }"
+		local mtime="${item%% *}"; item="${item#* }"
+		local content="${item}"
 		TWEET_FILES[${fname}]="${content}"
+		TWEET_FILES[${fname}_ctime]="${ctime}"
+		TWEET_FILES[${fname}_mtime]="${mtime}"
 
-		[[ "${text}" == "${item}" ]] && break
+		[[ "${text}" == "${item_orig}" ]] && break
 	done
 
 	for fname in "${!TWEET_FILES[@]}"; do
+		if [[ "${fname}" =~ .*_.* ]]; then
+			continue
+		fi
 		booze_out+="/${fname}"
 	done
 	
