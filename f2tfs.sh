@@ -1,5 +1,15 @@
 #!/bin/bash
 
+if [[ -z "${DBUS_USER}" ]]; then
+	echo Please specify DBUS_USER
+	exit 1
+fi
+
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS}" ]]; then
+	echo Please specify DBUS_SESSION_BUS_ADDRESS
+	exit 1
+fi
+
 BOOZE_DIR=../booze
 pushd ${BOOZE_DIR} >/dev/null
 . ./booze.sh
@@ -34,7 +44,7 @@ mikcall() {
 
 	log "${arg}"
 
-	sudo -u naota gdbus call -a ${DBUS_SESSION_BUS_ADDRESS} \
+	sudo -u ${DBUS_USER} gdbus call -a ${DBUS_SESSION_BUS_ADDRESS} \
 		-d org.mikutter.dynamic \
 		-o /org/mikutter/MyInstance \
 		-m org.mikutter.eval.ruby \
