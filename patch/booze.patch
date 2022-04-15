@@ -1,0 +1,47 @@
+diff --git a/Makefile b/Makefile
+index 994f8046c478..99629da3c57b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,7 +1,7 @@
+ 
+ CC = gcc
+ 
+-DEFINES = _GNU_SOURCE
++DEFINES = _GNU_SOURCE _FILE_OFFSET_BITS=64
+ 
+ LIBFLAGS = -shared
+ CWARN = -Wall
+@@ -17,6 +17,7 @@ CDEFINES = $(foreach d,$(DEFINES),-D$(d))
+ CFLAGS = $(CWARN) $(COPT) $(CDEFINES) $(LIBFLAGS) $(CDEBUG)
+ 
+ EXTRAFLAGS = $(shell pkg-config --cflags --libs fuse bash)
++#EXTRAFLAGS = $(shell pkg-config --cflags --libs fuse)
+ 
+ booze.so: booze.c
+ 	$(CC) $(CFLAGS) $(EXTRAFLAGS) -o $@ $<
+diff --git a/booze.c b/booze.c
+index 1231dbe2fde6..43c6d0c253da 100644
+--- a/booze.c
++++ b/booze.c
+@@ -639,7 +639,7 @@ static int booze_builtin(WORD_LIST* args)
+ 	fuse_argv[0] = "booze";
+ 	fuse_argv[1] = "-s";
+ 
+-	while ((opt = internal_getopt(args, "df")) != -1) {
++	while ((opt = internal_getopt(args, "dfo:")) != -1) {
+ 		switch (opt) {
+ 		case 'd':
+ 			fuse_argv[argidx++] = "-d";
+@@ -651,6 +651,12 @@ static int booze_builtin(WORD_LIST* args)
+ 			fuse_argv = xrealloc(fuse_argv, (argidx + 1) * sizeof(char*));
+ 			break;
+ 
++		case 'o':
++			fuse_argv = xrealloc(fuse_argv, (argidx + 2) * sizeof(char*));
++			fuse_argv[argidx++] = "-o";
++			fuse_argv[argidx++] = strdup(list_optarg);
++			break;
++
+ 		default:
+ 			xfree(fuse_argv);
+ 			builtin_usage();
